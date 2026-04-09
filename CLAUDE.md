@@ -63,8 +63,6 @@ actionlint <action-name>/action.yml
 actionlint .github/workflows/*.yml
 ```
 
-## Versioning
+## Releases
 
-Releases follow semantic versioning. Tags are applied to `main`:
-- `v1`, `v1.2`, `v1.2.3` — consumers should pin to a major tag (e.g., `@v1`)
-- Move major version tags (e.g., `v1`) on each release so consumers on `@v1` get the latest patch automatically
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full release process and versioning rules.

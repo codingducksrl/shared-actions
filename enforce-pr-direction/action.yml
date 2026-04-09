@@ -1,0 +1,76 @@
+name: Enforce PR Direction
+description: >
+  Enforces allowed branch direction rules for pull requests.
+  Rules are defined as a JSON array of from/to regex pairs.
+
+inputs:
+  rules:
+    description: >
+      JSON array of allowed direction rules. Each rule must have "from" and "to" fields,
+      both treated as regular expressions (re.fullmatch).
+      Example: [{"from": "^dev$", "to": "^staging$"}, {"from": "^staging$", "to": "^main$"}]
+    required: true
+  head-branch:
+    description: The source (head) branch of the PR.
+    required: false
+    default: ${{ github.head_ref }}
+  base-branch:
+    description: The target (base) branch of the PR.
+    required: false
+    default: ${{ github.base_ref }}
+
+outputs:
+  matched-rule:
+    description: The rule that matched, in "from -> to" format. Empty if no rule matched.
+    value: ${{ steps.check.outputs.matched-rule }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check PR direction
+      id: check
+      shell: python3 {0}
+      env:
+        HEAD_BRANCH: ${{ inputs.head-branch }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+        RULES: ${{ inputs.rules }}
+      run: |
+        import json, re, sys, os
+
+        head = os.environ["HEAD_BRANCH"]
+        base = os.environ["BASE_BRANCH"]
+
+        try:
+            rules = json.loads(os.environ["RULES"])
+        except json.JSONDecodeError as e:
+            print(f"::error::Invalid JSON in 'rules' input: {e}")
+            sys.exit(1)
+
+        if not isinstance(rules, list):
+            print("::error::'rules' input must be a JSON array")
+            sys.exit(1)
+
+        print(f"Checking PR direction: '{head}' → '{base}'")
+
+        for rule in rules:
+            from_pat = rule.get("from", "")
+            to_pat   = rule.get("to", "")
+            try:
+                if re.fullmatch(from_pat, head) and re.fullmatch(to_pat, base):
+                    matched = f"{from_pat} -> {to_pat}"
+                    print(f"✓ Allowed — matched rule: {matched}")
+                    with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+                        fh.write(f"matched-rule={matched}\n")
+                    sys.exit(0)
+            except re.error as e:
+                print(f"::warning::Skipping rule with invalid regex ({from_pat!r} -> {to_pat!r}): {e}")
+
+        lines = ["Allowed directions:"]
+        for rule in rules:
+            lines.append(f"  • {rule.get('from', '?')} → {rule.get('to', '?')}")
+        print("\n".join(lines))
+        print(f"::error::PR direction not allowed: '{head}' → '{base}'")
+
+        with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+            fh.write("matched-rule=\n")
+        sys.exit(1)
